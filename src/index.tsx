@@ -9,6 +9,11 @@ type Bindings = {
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+const [sidebarVisible, setSidebarVisible] = useState(true);
+
+const toggleSidebar = () => {
+    setSidebarVisible(!sidebarVisible);
+};
 
 app.use(renderer);
 
