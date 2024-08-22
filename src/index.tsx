@@ -3,16 +3,24 @@ import { streamText } from "hono/streaming";
 import { renderer } from "./renderer";
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { Ai } from "@cloudflare/workers-types";
+import { useState, useEffect } from "react";
 
 type Bindings = {
   AI: Ai;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// State to control sidebar visibility and settings visibility
 const [sidebarVisible, setSidebarVisible] = useState(true);
+const [settingsVisible, setSettingsVisible] = useState(false);
 
 const toggleSidebar = () => {
-    setSidebarVisible(!sidebarVisible);
+  setSidebarVisible(!sidebarVisible);
+};
+
+const toggleSettings = () => {
+  setSettingsVisible(!settingsVisible);
 };
 
 app.use(renderer);
@@ -20,39 +28,53 @@ app.use(renderer);
 app.get("/", (c) => {
   return c.render(
     <>
-     <div className="flex h-screen bg-gray-200">
-  {/* Chat interface */}
-  <div className="flex-grow flex flex-col">
-    <div
-      id="chat-history"
-      className="flex-1 overflow-y-auto p-6 space-y-4 bg-white flex flex-col-reverse messages-container"
-    ></div>
-    <div className="px-6 py-2 bg-white shadow-up">
-      <form className="flex items-center" id="chat-form">
-        <textarea
-          id="message-input"
-          className="flex-grow m-2 p-2 border border-chat-border rounded shadow-sm placeholder-chat-placeholder"
-          placeholder="Type a message..."
-        ></textarea>
+      <div className="flex h-screen bg-gray-200">
+        {/* Toggle button for settings */}
         <button
-          type="submit"
-          className="m-2 px-4 py-2 bg-chat-button text-black rounded hover:bg-gray-300"
+          className="m-2 p-2 bg-blue-500 text-white rounded md:hidden"
+          onClick={toggleSettings}
         >
-          Send
+          {settingsVisible ? "Hide Settings" : "Show Settings"}
         </button>
-      </form>
-      <div className="text-xs text-gray-500 mt-2">
-        <p className="model-display">-</p>
-        <input
-          type="hidden"
-          class="message-user message-assistant message-model"
-        />
+
+        {/* Chat interface */}
+        <div className={`flex-grow flex flex-col ${settingsVisible ? "ml-64" : ""}`}>
+          <div
+            id="chat-history"
+            className="flex-1 overflow-y-auto p-6 space-y-4 bg-white flex flex-col-reverse messages-container"
+          ></div>
+          <div className="px-6 py-2 bg-white shadow-up">
+            <form className="flex items-center" id="chat-form">
+              <textarea
+                id="message-input"
+                className="flex-grow m-2 p-2 border border-chat-border rounded shadow-sm placeholder-chat-placeholder"
+                placeholder="Type a message..."
+              ></textarea>
+              <button
+                type="submit"
+                className="m-2 px-4 py-2 bg-chat-button text-black rounded hover:bg-gray-300"
+              >
+                Send
+              </button>
+            </form>
+            <div className="text-xs text-gray-500 mt-2">
+              <p className="model-display">-</p>
+              <input
+                type="hidden"
+                className="message-user message-assistant message-model"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Settings Sidebar - Hidden by default */}
+        {settingsVisible && (
+          <div className="w-64 bg-gray-300 p-4">
+            {/* Settings content here */}
+            <p>Settings Content</p>
+          </div>
+        )}
       </div>
-    </div>
-  </div>
-  
-  {/* Settings bar removed */}
-</div>
       <script src="/static/script.js"></script>
     </>
   );
@@ -61,12 +83,10 @@ app.get("/", (c) => {
 app.post("/api/chat", async (c) => {
   const payload = await c.req.json();
   const messages = [...payload.messages];
-  // Prepend the systemMessage
   if (payload?.config?.systemMessage) {
     messages.unshift({ role: "system", content: payload.config.systemMessage });
   }
-  //console.log("Model", payload.config.model);
-  //console.log("Messages", JSON.stringify(messages));
+
   let eventSourceStream;
   let retryCount = 0;
   let successfulInference = false;
@@ -92,7 +112,7 @@ app.post("/api/chat", async (c) => {
     }
     throw new Error(`Problem with model`);
   }
-  // EventSource stream is handy for local event sources, but we want to just stream text
+
   const tokenStream = eventSourceStream
     .pipeThrough(new TextDecoderStream())
     .pipeThrough(new EventSourceParserStream());
